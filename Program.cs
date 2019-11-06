@@ -6,82 +6,37 @@ using System.Collections.Generic;
 using Telegram.Bot.Types.InlineQueryResults;
 using Telegram.Bot.Types.InputFiles;
 using Telegram.Bot.Types;
+using System.Linq;
 
 namespace c_sharp_filb_bot
 {
-    //:hexe:|135|12|7|gif
-    //name|index|width|height|extension
-    class FilbEmoticonData
-    {
-        public FilbEmoticonData(string name, int index, int width, int height, string extension)
-        {
-            Name = name;
-            Index = index;
-            Width = width;
-            Height = height;
-            Extension = extension;
-        }
-
-        public string Name { get; }
-        public int Index { get; }
-        public int Width { get; }
-        public int Height { get; }
-        public string Extension { get; }
-
-        public string ImageFileName => $"{Index}.{Extension}";
-        public string FileHost => $"http://filbemoticonbot.bplaced.net/img/{ImageFileName}";
-        public string ThumbHost => $"http://filbemoticonbot.bplaced.net/img/thumb/{ImageFileName}";
-
-        public static FilbEmoticonData FromString(string text)
-        {
-            var tokens = text.Split('|');
-            string name = tokens[0];
-            int index = int.Parse(tokens[1]);
-            int width = int.Parse(tokens[2]);
-            int height = int.Parse(tokens[3]);
-            string extension = tokens[4];
-            return new FilbEmoticonData(name, index, width, height, extension);
-        }
-
-        internal InlineQueryResultBase GenerateQueryResult()
-        {
-            if(Extension == "gif")
-            {
-                var result = new InlineQueryResultGif(Index.ToString(), FileHost, ThumbHost);
-                result.GifHeight = Height;
-                result.GifWidth = Width;
-                result.Title = Name;
-                return result;
-            }
-            else if(Extension == "png")
-            {
-                var result = new InlineQueryResultPhoto(Index.ToString(), FileHost, ThumbHost);
-                result.PhotoHeight = Height;
-                result.PhotoWidth = Width;
-                result.Title = Name;
-                return result;
-            }
-            return new InlineQueryResultArticle(Index.ToString(), "New Extension discovered!", new InputTextMessageContent($"A new Extension named {Extension} was discovered while searching for '{Name}'."));
-        }
-    }
     class Program
     {
+        private static Random random = new Random();
         static TelegramBotClient botClient;
         static List<FilbEmoticonData> entries;
+        static Dictionary<long, List<InlineQueryResultBase>> recentQueries;
+        const int MaxRecentQueries = 5;
+        const string recentQueriesFile = @".\recentQueries.txt";
         static void Main(string[] args)
         {
             entries = new List<FilbEmoticonData>();
-            var dataFile = @".\filb_dump\data.txt";
+            var dataFile = @".\data.txt";
             using (FileStream fs = new FileStream(dataFile, FileMode.Open))
             using (StreamReader sr = new StreamReader(fs))
             {
                 while (!sr.EndOfStream)
                 {
                     var line = sr.ReadLine().Trim();
-                    entries.Add(FilbEmoticonData.FromString(line));
-                    Console.WriteLine(line);
+                    var entry = FilbEmoticonData.FromString(line);
+                    entries.Add(entry);
                 }
             }
+
+            if(System.IO.File.Exists(recentQueriesFile))
+                recentQueries = DeserializeRecentQueries();
+            else
+                recentQueries = new Dictionary<long, List<InlineQueryResultBase>>();
 
             var token = System.IO.File.ReadAllText("token.txt");
             botClient = new TelegramBotClient(token);
@@ -90,42 +45,130 @@ namespace c_sharp_filb_bot
                 $"Hello, World! I am user {me.Id} and my name is {me.FirstName}."
             );
 
-
             botClient.OnMessage += Bot_OnMessage;
             botClient.OnInlineQuery += Bot_OnInlineQuery;
-            botClient.OnInlineResultChosen += Bot_OnInlineResultChosen;
             botClient.StartReceiving();
             Console.ReadLine();
         }
-
-        private static void Bot_OnInlineResultChosen(object sender, ChosenInlineResultEventArgs e)
+        private static List<InlineQueryResultBase> CollectResult(string query, int max = 50)
         {
-            Console.WriteLine($"{e.ChosenInlineResult.ResultId}");
-
-        }
-
-        private static IEnumerable<InlineQueryResultBase> CollectResult(string query)
-        {
-            var max = 49;
-            var result = new List<InlineQueryResultBase>();
+            var sortedEntries = new List<FilbEmoticonData>();
             foreach (var entry in entries)
+                sortedEntries.Add(entry);
+            sortedEntries.Sort((a, b) => a.GetScore(query).CompareTo(b.GetScore(query)));
+
+            var result = new List<InlineQueryResultBase>();
+            foreach (var entry in sortedEntries)
             {
-                if (entry.Name.Contains(query))
+                if (entry.GetScore(query) < 100)
                 {
                     result.Add(entry.GenerateQueryResult());
                     max--;
                 }
-                if (max < 0)
+                if (max <= 0)
                     break;
+            }
+            return result;
+        }
+
+        private static List<InlineQueryResultBase> GetRandomEmoticons(int count)
+        {
+            var result = new List<InlineQueryResultBase>();
+            var indices = new List<int>();
+            while(indices.Count < count)
+            {
+                var current = random.Next(entries.Count);
+                if(!indices.Contains(current))
+                    indices.Add(current);
+            }
+            foreach (var index in indices)
+            {
+                result.Add(entries[index].GenerateQueryResult());
             }
             return result;
         }
 
         private static async void Bot_OnInlineQuery(object sender, InlineQueryEventArgs e)
         {
-            Console.WriteLine($"{e.InlineQuery.Query}");
-            var result = CollectResult(e.InlineQuery.Query);
+            var query = e.InlineQuery.Query;
+            var user = e.InlineQuery.From.Id;
+            List<InlineQueryResultBase> result = null;
+            if(string.IsNullOrWhiteSpace(query))
+            {
+                
+                if(recentQueries.ContainsKey(user))
+                {
+                   result = recentQueries[user];
+                }
+                else{
+                    //Give some random emoticons.
+                    result = GetRandomEmoticons(50);
+                }
+            }
+            else
+            {
+                result = CollectResult(e.InlineQuery.Query);
+                if(!recentQueries.ContainsKey(user))
+                    recentQueries.Add(user, new List<InlineQueryResultBase>());
+                recentQueries[user].Add(result[0]);
+                if(recentQueries[user].Count > MaxRecentQueries)
+                    recentQueries[user].RemoveAt(0);
+                SerializeRecentQueries();
+            }
             await botClient.AnswerInlineQueryAsync(e.InlineQuery.Id, result);
+        }
+
+        private static void SerializeRecentQueries()
+        {
+            using(var fs = new FileStream(recentQueriesFile, FileMode.Create))
+            using(var sw = new StreamWriter(fs))
+            {
+                foreach (var recentQuery in recentQueries)
+                {
+                    sw.WriteLine($"{recentQuery.Key}:{string.Join(",", recentQuery.Value.Select(q => q.Id))}");
+                }
+            }
+        }
+
+        private static Dictionary<long, List<InlineQueryResultBase>> DeserializeRecentQueries()
+        {
+            var result = new Dictionary<long, List<InlineQueryResultBase>>();
+            using(var fs = new FileStream(recentQueriesFile, FileMode.Create))
+            using(var sw = new StreamReader(fs))
+            {
+                while(!sw.EndOfStream)
+                {
+                    var line = sw.ReadLine();
+                    var tokens = line.Split(':');
+                    if(tokens.Length != 2)
+                    {
+                        Console.WriteLine($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                        continue;
+                    }
+                    if(!long.TryParse(tokens[0], out long userId))
+                    {
+                        Console.WriteLine($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                        continue;
+                    }
+                    result.Add(userId, new List<InlineQueryResultBase>());
+                    foreach (var strId in tokens[1].Split(','))
+                    {
+                        if(!int.TryParse(strId, out var id))
+                        {
+                            Console.WriteLine($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                            continue;
+                        }
+                        var entry = entries.FirstOrDefault(e => e.Index == id);
+                        if(entry == null)
+                        {
+                            Console.WriteLine($"ERROR: Could not read recentQueries. No entry with Index {id}.");
+                            continue;
+                        }
+                        result[userId].Add(entry.GenerateQueryResult());
+                    }
+                }
+            }
+            return result;
         }
 
         static async void Bot_OnMessage(object sender, MessageEventArgs e)
