@@ -108,12 +108,18 @@ namespace c_sharp_filb_bot
             else
             {
                 result = CollectResult(e.InlineQuery.Query);
-                if(!recentQueries.ContainsKey(user))
-                    recentQueries.Add(user, new List<InlineQueryResultBase>());
-                recentQueries[user].Add(result[0]);
-                if(recentQueries[user].Count > MaxRecentQueries)
-                    recentQueries[user].RemoveAt(0);
-                SerializeRecentQueries();
+                if(result.Count > 0)
+                {
+                    if(!recentQueries.ContainsKey(user))
+                        recentQueries.Add(user, new List<InlineQueryResultBase>());
+                    if(!recentQueries[user].Any(r => r.Id == result[0].Id))
+                    {
+                        recentQueries[user].Add(result[0]);
+                        if(recentQueries[user].Count > MaxRecentQueries)
+                            recentQueries[user].RemoveAt(0);
+                        SerializeRecentQueries();
+                    }
+                }
             }
             await botClient.AnswerInlineQueryAsync(e.InlineQuery.Id, result);
         }
