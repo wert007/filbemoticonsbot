@@ -7,34 +7,36 @@ namespace c_sharp_filb_bot
     //name|index|width|height|extension
     class FilbEmoticonData
     {
-        public FilbEmoticonData(string name, int index, int width, int height, string extension)
+        public FilbEmoticonData(string name, int index, int width, int height)
         {
             Name = name;
             Index = index;
             Width = width;
             Height = height;
-            Extension = extension;
         }
 
         public string Name { get; }
         public int Index { get; }
         public int Width { get; }
         public int Height { get; }
-        public string Extension { get; }
 
-        public string ImageFileName => $"{Index}.{Extension}";
+        public string ImageFileName => $"{Index}.gif";
         public string FileHost => $"http://filbemoticonbot.bplaced.net/img/{ImageFileName}";
         public string ThumbHost => $"http://filbemoticonbot.bplaced.net/img/thumb/{ImageFileName}";
 
         public static FilbEmoticonData FromString(string text)
         {
             var tokens = text.Split('|');
-            string name = tokens[0];
-            int index = int.Parse(tokens[1]);
-            int width = int.Parse(tokens[2]);
-            int height = int.Parse(tokens[3]);
-            string extension = tokens[4];
-            return new FilbEmoticonData(name, index, width, height, extension);
+            if(tokens.Length < 4)
+                return null;
+            var name = tokens[0];
+            if(!int.TryParse(tokens[1], out var index))
+                return null;
+            if(!int.TryParse(tokens[2], out var width))
+                return null;
+            if(!int.TryParse(tokens[3], out var height))
+                return null;
+            return new FilbEmoticonData(name, index, width, height);
         }
 
         internal int GetScore(string text)
@@ -126,12 +128,6 @@ namespace c_sharp_filb_bot
             var result = new InlineQueryResultGif(Index.ToString(), FileHost, ThumbHost);
             result.GifHeight = Height;
             result.GifWidth = Width;
-            if(Extension == "png")
-            {
-                var itmc = new InputTextMessageContent($"<a href=\"{FileHost}\">.</a>");
-                itmc.ParseMode = Telegram.Bot.Types.Enums.ParseMode.Html;
-                result.InputMessageContent = itmc;
-            }
             return result;
         }
     }
