@@ -238,6 +238,7 @@ namespace c_sharp_filb_bot
 
         static async void Bot_OnMessage(object sender, MessageEventArgs e)
         {
+            //TODO
             if (e.Message.Text != null)
             {
                 Console.WriteLine($"Received a text message in chat {e.Message.Chat.Id}.");

@@ -3,8 +3,8 @@ using Telegram.Bot.Types.InlineQueryResults;
 
 namespace c_sharp_filb_bot
 {
-    //:hexe:|135|12|7|gif
-    //name|index|width|height|extension
+    //:hexe:|135|12|7
+    //name|index|width|height
     class FilbEmoticonData
     {
         public FilbEmoticonData(string name, int index, int width, int height)
