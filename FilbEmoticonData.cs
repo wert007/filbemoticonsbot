@@ -20,9 +20,9 @@ namespace c_sharp_filb_bot
         public int Width { get; }
         public int Height { get; }
 
-        public string ImageFileName => $"{Index}.gif";
-        public string FileHost => $"http://filbemoticonbot.bplaced.net/img/{ImageFileName}";
-        public string ThumbHost => $"http://filbemoticonbot.bplaced.net/img/thumb/{ImageFileName}";
+        public string ImageFileName => Index + ".gif";
+        public string FileHost => "http://filbemoticonbot.bplaced.net/img/" + ImageFileName;
+        public string ThumbHost => "http://filbemoticonbot.bplaced.net/img/thumb/" + ImageFileName;
 
         public static FilbEmoticonData FromString(string text)
         {
@@ -133,7 +133,8 @@ namespace c_sharp_filb_bot
 
         public InlineQueryResultBase GenerateCheatSheet()
         {
-            var strArticleContent = $"You can find this Emoticon by looking for {Name}. It was {Width}x{Height}px large originally. It is saved as '{ImageFileName}'.";
+            var strArticleContent = "You can find this Emoticon by looking for " + Name + 
+                ". It was " + Width + "x" + Height + "px large originally. It is saved as '" + ImageFileName + "'.";
             var articleContent = new InputTextMessageContent(strArticleContent);
             var article = new InlineQueryResultArticle(Index.ToString(), Name, articleContent);
             article.ThumbUrl = ThumbHost;

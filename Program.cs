@@ -58,7 +58,7 @@ namespace c_sharp_filb_bot
                         var entry = FilbEmoticonData.FromString(line);
                         if(entry == null)
                         {
-                            Report($"ERROR: Could not read data.txt. Malformed line '{line}'.");
+                            Report("ERROR: Could not read data.txt. Malformed line '" + line + "'.");
                             continue;
                         }
                         entries.Add(entry);
@@ -74,7 +74,7 @@ namespace c_sharp_filb_bot
             var me = botClient.GetMeAsync().Result;
             //Bot is running.
             Console.WriteLine(
-                $"Hello, World! I am user {me.Id} and my name is {me.FirstName}."
+                "Hello, World! I am user " + me.Id + " and my name is " + me.FirstName + "."
             );
 
             botClient.OnMessage += Bot_OnMessage;
@@ -305,7 +305,7 @@ namespace c_sharp_filb_bot
                 {
                     foreach (var recentQuery in recentQueries)
                     {
-                        sw.WriteLine($"{recentQuery.Key}:{string.Join(",", recentQuery.Value.Select(q => q.Id))}");
+                        sw.WriteLine(recentQuery.Key.ToString() + ":" + string.Join(",", recentQuery.Value.Select(q => q.Id)));
                     }
                 }
             }
@@ -328,12 +328,12 @@ namespace c_sharp_filb_bot
                         var tokens = line.Split(':');
                         if(tokens.Length != 2)
                         {
-                            Report($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                            Report("ERROR: Could not read recentQueries. Line '" + line + "' is malformed.");
                             continue;
                         }
                         if(!long.TryParse(tokens[0], out long userId))
                         {
-                            Report($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                            Report("ERROR: Could not read recentQueries. Line '" + line + "' is malformed.");
                             continue;
                         }
                         result.Add(userId, new List<InlineQueryResultBase>());
@@ -341,13 +341,13 @@ namespace c_sharp_filb_bot
                         {
                             if(!int.TryParse(strId, out var id))
                             {
-                                Report($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                                Report("ERROR: Could not read recentQueries. Line '" + line + "' is malformed.");
                                 continue;
                             }
                             var entry = entries.FirstOrDefault(e => e.Index == id);
                             if(entry == null)
                             {
-                                Report($"ERROR: Could not read recentQueries. No entry with Index {id}.");
+                                Report("ERROR: Could not read recentQueries. No entry with Index " + id + ".");
                                 continue;
                             }
                             result[userId].Add(entry.GenerateQueryResult());
