@@ -331,7 +331,8 @@ namespace c_sharp_filb_bot
                             Report("ERROR: Could not read recentQueries. Line '" + line + "' is malformed.");
                             continue;
                         }
-                        if(!long.TryParse(tokens[0], out long userId))
+                        long userId = -1;
+                        if(!long.TryParse(tokens[0], out userId))
                         {
                             Report("ERROR: Could not read recentQueries. Line '" + line + "' is malformed.");
                             continue;
@@ -339,7 +340,8 @@ namespace c_sharp_filb_bot
                         result.Add(userId, new List<InlineQueryResultBase>());
                         foreach (var strId in tokens[1].Split(','))
                         {
-                            if(!int.TryParse(strId, out var id))
+                            int id = -1;
+                            if(!int.TryParse(strId, out id))
                             {
                                 Report("ERROR: Could not read recentQueries. Line '" + line + "' is malformed.");
                                 continue;
