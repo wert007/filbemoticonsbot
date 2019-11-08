@@ -67,7 +67,7 @@ namespace c_sharp_filb_bot
             }
             lowest = currentScore;
             currentScore = 0;
-            if(text.Length <= Name.Length)
+            if(text.Length < Name.Length)
             {
                 //Right aligned
                 var start = Name.Length - text.Length;
@@ -86,7 +86,7 @@ namespace c_sharp_filb_bot
                 lowest = Math.Min(currentScore, lowest);
                 currentScore = 0;
             }
-            if(text.Length - 1 <= Name.Length)
+            if(text.Length - 1 < Name.Length)
             {
                 //Left-aligned + 1
                 for (int i = 0; i < Name.Length; i++)
@@ -129,6 +129,18 @@ namespace c_sharp_filb_bot
             result.GifHeight = Height;
             result.GifWidth = Width;
             return result;
+        }
+
+        public InlineQueryResultBase GenerateCheatSheet()
+        {
+            var strArticleContent = $"You can find this Emoticon by looking for {Name}. It was {Width}x{Height}px large originally. It is saved as '{ImageFileName}'.";
+            var articleContent = new InputTextMessageContent(strArticleContent);
+            var article = new InlineQueryResultArticle(Index.ToString(), Name, articleContent);
+            article.ThumbUrl = ThumbHost;
+            article.ThumbHeight = Height;
+            article.ThumbWidth = Width;
+            article.Description = strArticleContent;
+            return article;
         }
     }
 }

@@ -18,23 +18,51 @@ namespace c_sharp_filb_bot
         static Dictionary<long, List<InlineQueryResultBase>> recentQueries;
         const int MaxRecentQueries = 5;
         const string recentQueriesFile = @".\recentQueries.txt";
+        const long creatorId = 17856797;
+        private const string strContentDefault = "If you just want to search for emoticons, then please don't use the #. Otherwise use #all to discover random emoticons. Or use #cheat to get to know them by name.";
+        private const string strContentHelp = "Use #all to discover random emoticons. Or use #cheat to get to know them by name. Otherwise you can just search for them without a # at the start.";
+        private const int MaxEntries = 50;
+
         static void Main(string[] args)
         {
+
+            try
+            {
+                var token = System.IO.File.ReadAllText("token.txt");
+                botClient = new TelegramBotClient(token);
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine("FATAL ERROR: Could not initialize TelegramBotClient.");
+                Console.WriteLine();
+                Console.WriteLine(e);
+                Console.ReadLine();
+            }
+
+
+
             entries = new List<FilbEmoticonData>();
             var dataFile = @".\data.txt";
-            using (FileStream fs = new FileStream(dataFile, FileMode.Open))
-            using (StreamReader sr = new StreamReader(fs))
+            if(!System.IO.File.Exists(dataFile))
             {
-                while (!sr.EndOfStream)
+                Report("FATAL ERROR: Could not load Emoticon data base.",  new FileNotFoundException("File not found", dataFile));
+            }
+            else
+            {
+                using (FileStream fs = new FileStream(dataFile, FileMode.Open))
+                using (StreamReader sr = new StreamReader(fs))
                 {
-                    var line = sr.ReadLine().Trim();
-                    var entry = FilbEmoticonData.FromString(line);
-                    if(entry == null)
+                    while (!sr.EndOfStream)
                     {
-                        Console.WriteLine($"ERROR: Could not read data.txt. Malformed line '{line}'.");
-                        continue;
+                        var line = sr.ReadLine().Trim();
+                        var entry = FilbEmoticonData.FromString(line);
+                        if(entry == null)
+                        {
+                            Report($"ERROR: Could not read data.txt. Malformed line '{line}'.");
+                            continue;
+                        }
+                        entries.Add(entry);
                     }
-                    entries.Add(entry);
                 }
             }
 
@@ -43,9 +71,8 @@ namespace c_sharp_filb_bot
             else
                 recentQueries = new Dictionary<long, List<InlineQueryResultBase>>();
             
-            var token = System.IO.File.ReadAllText("token.txt");
-            botClient = new TelegramBotClient(token);
             var me = botClient.GetMeAsync().Result;
+            //Bot is running.
             Console.WriteLine(
                 $"Hello, World! I am user {me.Id} and my name is {me.FirstName}."
             );
@@ -54,6 +81,56 @@ namespace c_sharp_filb_bot
             botClient.OnInlineQuery += Bot_OnInlineQuery;
             botClient.StartReceiving();
             Console.ReadLine();
+        }
+
+        private static bool MessageExceptionTo(long creatorId, Exception exception)
+        {
+            var result = true;
+            try{
+                botClient.SendTextMessageAsync(new ChatId(creatorId), exception.ToString());
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("ERROR: While trying to send a Exception another Error occurred.");
+                Console.WriteLine();
+                Console.WriteLine(ex);
+                result = false;
+            }
+            return result;
+        }
+
+        private static bool MessageExceptionTo(long creatorId, string exception)
+        {
+            var result = true;
+            try{
+                botClient.SendTextMessageAsync(new ChatId(creatorId), exception.ToString());
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine("ERROR: While trying to send a Exception another Error occurred.");
+                Console.WriteLine();
+                Console.WriteLine(ex);
+                result = false;
+            }
+            return result;
+        }
+
+        private static List<InlineQueryResultBase> CollectCheatSheet(string query, int max = 50)
+        { 
+            entries.Sort((a, b) => a.GetScore(query).CompareTo(b.GetScore(query)));
+
+            var result = new List<InlineQueryResultBase>();
+            foreach (var entry in entries)
+            {
+                if (entry.GetScore(query) < 100)
+                {
+                    result.Add(entry.GenerateCheatSheet());
+                    max--;
+                }
+                if (max <= 0)
+                    break;
+            }
+            return result;
         }
         private static List<InlineQueryResultBase> CollectResult(string query, int max = 50)
         {
@@ -73,9 +150,15 @@ namespace c_sharp_filb_bot
             return result;
         }
 
-        private static int[] GenerateRandomIndices(int count)
+        private static int[] GenerateRandomIndices(uint count)
         {
             var indices = new List<int>();
+            if(count >= entries.Count)
+            {
+                for (int i = 0; i < entries.Count; i++)
+                    indices.Add(i);
+                return indices.ToArray();
+            }
             while(indices.Count < count)
             {
                 var current = random.Next(entries.Count);
@@ -84,7 +167,7 @@ namespace c_sharp_filb_bot
             }
             return indices.ToArray();
         }
-        private static List<InlineQueryResultBase> GetRandomEmoticons(int count)
+        private static List<InlineQueryResultBase> GetRandomEmoticons(uint count)
         {
             var result = new List<InlineQueryResultBase>();
             var indices = GenerateRandomIndices(count);
@@ -95,19 +178,13 @@ namespace c_sharp_filb_bot
             return result;
         }
 
-        private static List<InlineQueryResultBase> GetRandomCheatSheet(int count)
+        private static List<InlineQueryResultBase> GetRandomCheatSheets(uint count)
         {
             var result = new List<InlineQueryResultBase>();
             var indices = GenerateRandomIndices(count);
             foreach (var index in indices)
             {
-                var current = entries[index];
-                var articleContent = new InputTextMessageContent("TODO");
-                var article = new InlineQueryResultArticle(current.Index.ToString(), current.Name, articleContent);
-                article.ThumbUrl = current.ThumbHost;
-                article.ThumbHeight = current.Height;
-                article.ThumbWidth = current.Width;
-                result.Add(article);
+                result.Add(entries[index].GenerateCheatSheet());
             }
             return result;
         }
@@ -120,18 +197,16 @@ namespace c_sharp_filb_bot
             if(string.IsNullOrWhiteSpace(query))
             {
                 if(recentQueries.ContainsKey(user))
-                {
                    result = recentQueries[user];
-                }
-                else{
-                    //Give some random emoticons.
-                    result = GetRandomEmoticons(50);
-                }
+                else
+                    result = GetRandomEmoticons(MaxEntries);
             }
             else
             {
                 if(query.StartsWith("#"))
                 {
+                    //TODO: Maybe add parameters..
+                    var commandFound = false;
                     switch (query)
                     {
                         case "#random":
@@ -141,26 +216,54 @@ namespace c_sharp_filb_bot
                         case "#zufall":
                         case "#entdecken":
                         case "#alle":
-                            result = GetRandomEmoticons(50);
+                            result = GetRandomEmoticons(MaxEntries);
+                            commandFound = true;
                             break;
                         case "#cheat":
-                            result = GetRandomCheatSheet(50);
+                            result = GetRandomCheatSheets(MaxEntries);
+                            commandFound = true;
                             break;
                         case "#help":
-                            //todo
                             result = new List<InlineQueryResultBase>();
-                            var contentHelp = new InputTextMessageContent("Use #all to discover randomsmileys. Otherwise just search for some.");
+                            var contentHelp = new InputTextMessageContent(strContentHelp);
                             var helpArticle = new InlineQueryResultArticle("help", "You need some help?", contentHelp);
+                            helpArticle.Description = strContentHelp;
+                            var confusedEntry = entries.FirstOrDefault(entry => entry.Index == 10);
+                            if(confusedEntry != null)
+                            {
+                                helpArticle.ThumbUrl = confusedEntry.ThumbHost;
+                                helpArticle.ThumbHeight = confusedEntry.Height;
+                                helpArticle.ThumbWidth = confusedEntry.Width;
+                            }
                             result.Add(helpArticle);
+                            commandFound = true;
                             break;
-                        default:
-                            //TODO: Maybe add an article here?
-                            
-                            result = new List<InlineQueryResultBase>();
-                            var contentDefault = new InputTextMessageContent("Use #all to discover randomsmileys or #help if you want to learn more. Otherwise just search for some.");
-                            var defaultArticle = new InlineQueryResultArticle("help", "You need some help?", contentDefault);
-                            result.Add(defaultArticle);
-                            break;
+                    }
+                    var tokens = query.Split(' ');
+                    if(tokens.Length == 2)
+                    {
+                        switch (tokens[0])
+                        {
+                            case "#cheat":
+                                result = CollectCheatSheet(tokens[1]);
+                                commandFound = true;
+                                break;
+                        }
+                    }
+                    if(!commandFound)
+                    {
+                        result = new List<InlineQueryResultBase>();
+                        var contentDefault = new InputTextMessageContent(strContentDefault);
+                        var defaultArticle = new InlineQueryResultArticle("help", "You need some help?", contentDefault);
+                        defaultArticle.Description = strContentDefault;
+                        var confusedEntry = entries.FirstOrDefault(entry => entry.Index == 10);
+                        if(confusedEntry != null)
+                        {
+                            defaultArticle.ThumbUrl = confusedEntry.ThumbHost;
+                            defaultArticle.ThumbHeight = confusedEntry.Height;
+                            defaultArticle.ThumbWidth = confusedEntry.Width;
+                        }
+                        result.Add(defaultArticle);
                     }
                 }
                 else
@@ -178,76 +281,109 @@ namespace c_sharp_filb_bot
                             SerializeRecentQueries();
                         }
                     }
+                    else
+                    {
+                        //TODO: Add article.
+                    }
                 }
             }
-            await botClient.AnswerInlineQueryAsync(e.InlineQuery.Id, result);
+            try
+            {
+                await botClient.AnswerInlineQueryAsync(e.InlineQuery.Id, result);
+            }
+            catch(Exception ex)
+            {
+                Report("ERROR: Error while trying to send InlineQueryResults.", ex);
+            }
         }
 
         private static void SerializeRecentQueries()
         {
-            using(var fs = new FileStream(recentQueriesFile, FileMode.Create))
-            using(var sw = new StreamWriter(fs))
-            {
-                foreach (var recentQuery in recentQueries)
+            try {
+                using(var fs = new FileStream(recentQueriesFile, FileMode.Create))
+                using(var sw = new StreamWriter(fs))
                 {
-                    sw.WriteLine($"{recentQuery.Key}:{string.Join(",", recentQuery.Value.Select(q => q.Id))}");
+                    foreach (var recentQuery in recentQueries)
+                    {
+                        sw.WriteLine($"{recentQuery.Key}:{string.Join(",", recentQuery.Value.Select(q => q.Id))}");
+                    }
                 }
+            }
+            catch(Exception ex)
+            {
+                Report("ERROR: Could not write recentQueries.", ex);
             }
         }
 
         private static Dictionary<long, List<InlineQueryResultBase>> DeserializeRecentQueries()
         {
             var result = new Dictionary<long, List<InlineQueryResultBase>>();
-            using(var fs = new FileStream(recentQueriesFile, FileMode.Create))
-            using(var sw = new StreamReader(fs))
-            {
-                while(!sw.EndOfStream)
+            try {
+                using(var fs = new FileStream(recentQueriesFile, FileMode.Create))
+                using(var sw = new StreamReader(fs))
                 {
-                    var line = sw.ReadLine();
-                    var tokens = line.Split(':');
-                    if(tokens.Length != 2)
+                    while(!sw.EndOfStream)
                     {
-                        Console.WriteLine($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
-                        continue;
-                    }
-                    if(!long.TryParse(tokens[0], out long userId))
-                    {
-                        Console.WriteLine($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
-                        continue;
-                    }
-                    result.Add(userId, new List<InlineQueryResultBase>());
-                    foreach (var strId in tokens[1].Split(','))
-                    {
-                        if(!int.TryParse(strId, out var id))
+                        var line = sw.ReadLine();
+                        var tokens = line.Split(':');
+                        if(tokens.Length != 2)
                         {
-                            Console.WriteLine($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                            Report($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
                             continue;
                         }
-                        var entry = entries.FirstOrDefault(e => e.Index == id);
-                        if(entry == null)
+                        if(!long.TryParse(tokens[0], out long userId))
                         {
-                            Console.WriteLine($"ERROR: Could not read recentQueries. No entry with Index {id}.");
+                            Report($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
                             continue;
                         }
-                        result[userId].Add(entry.GenerateQueryResult());
+                        result.Add(userId, new List<InlineQueryResultBase>());
+                        foreach (var strId in tokens[1].Split(','))
+                        {
+                            if(!int.TryParse(strId, out var id))
+                            {
+                                Report($"ERROR: Could not read recentQueries. Line '{line}' is malformed.");
+                                continue;
+                            }
+                            var entry = entries.FirstOrDefault(e => e.Index == id);
+                            if(entry == null)
+                            {
+                                Report($"ERROR: Could not read recentQueries. No entry with Index {id}.");
+                                continue;
+                            }
+                            result[userId].Add(entry.GenerateQueryResult());
+                        }
                     }
                 }
+            }
+            catch(Exception ex)
+            {
+                Report("ERROR: Could not read recentQueries.", ex);
             }
             return result;
         }
 
-        static async void Bot_OnMessage(object sender, MessageEventArgs e)
+        private static bool Report(string message, Exception source = null)
         {
-            //TODO
-            if (e.Message.Text != null)
+            Console.WriteLine(message);
+            if(source != null)
             {
-                Console.WriteLine($"Received a text message in chat {e.Message.Chat.Id}.");
-
-                await botClient.SendTextMessageAsync(
-                  chatId: e.Message.Chat,
-                  text: "You said:\n" + e.Message.Text
-                );
+                Console.WriteLine();
+                Console.WriteLine(source);
+                return MessageExceptionTo(creatorId, source);
             }
+            else{
+                MessageExceptionTo(creatorId, message);
+            }
+            return false;
+        }
+
+        static async void Bot_OnMessage(object sender, MessageEventArgs e)
+        { 
+            await botClient.SendTextMessageAsync(
+                chatId: e.Message.Chat,
+                text: "Please use this bot inline. For example ``` @filbemoticonsbot #help ``` or ``` @filbemoticonsbot lmao ```",
+                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown
+            );
         }
     }
 }
