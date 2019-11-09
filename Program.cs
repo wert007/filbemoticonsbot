@@ -17,7 +17,7 @@ namespace c_sharp_filb_bot
         static List<FilbEmoticonData> entries;
         static Dictionary<long, List<InlineQueryResultBase>> recentQueries;
         const int MaxRecentQueries = 5;
-        const string recentQueriesFile = @".\recentQueries.txt";
+        const string recentQueriesFile = @"./recentQueries.txt";
         const long creatorId = 17856797;
         private const string strContentDefault = "If you just want to search for emoticons, then please don't use the #. Otherwise use #all to discover random emoticons. Or use #cheat to get to know them by name.";
         private const string strContentHelp = "Use #all to discover random emoticons. Or use #cheat to get to know them by name. Otherwise you can just search for them without a # at the start.";
@@ -42,7 +42,7 @@ namespace c_sharp_filb_bot
 
 
             entries = new List<FilbEmoticonData>();
-            var dataFile = @".\data.txt";
+            var dataFile = @"./data.txt";
             if(!System.IO.File.Exists(dataFile))
             {
                 Report("FATAL ERROR: Could not load Emoticon data base.",  new FileNotFoundException("File not found", dataFile));
